@@ -1,13 +1,11 @@
-const Sequelize = require('sequelize');
 require('dotenv').config();
 
-const { DATABASE_NAME, USER_NAME, PASSWORD, HOST, DIALECT } = process.env;
+const { DB_URL , DATABASE_NAME } = process.env;
 
 
-const sequelize = new Sequelize(DATABASE_NAME, USER_NAME, PASSWORD, {
-    host: HOST,
-    dialect: DIALECT
-});
+const mongo = {
+    url : `${DB_URL}/${DATABASE_NAME}`
+}
 
 
-module.exports = sequelize;
+module.exports = mongo;

@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const { errorMessages } = require('../constants/error');
 const jwt = require('jsonwebtoken');
-const Order = require('../models/order');
 const User = require('../models/user');
 const Question = require('../models/question');
 require('dotenv').config();
@@ -25,34 +23,45 @@ router.post('/signup', async (req, res) => {
         // Initial validation of body
         if (!email || !password || !mobile || !firstName || !lastName) {
             res.status(400);
-            return res.json({message:'missing or wrong credentials'});
+            return res.json({ message: 'missing or wrong credentials' });
+        }
+
+        const mob = mobile.toString();
+
+        if (mob.length !== 10) {
+            res.status(400);
+            return res.json({ message: 'missing or wrong credentials' });
         }
 
         // checking if user exists in DB
-        const DbUser = await User.findAll({ where: { email: email } });
+        const DbUser = await User.find({ email: email }).exec();
+        console.log(DbUser);
 
         // If user exists , then send confirmation or else create user in DB
         if (DbUser.length) {
             res.status(200);
-            return res.json({message:'user created'});
+            return res.json({ message: 'user created' });
         } else {
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(password, salt);
-            await User.create({
+            console.log('user creation');
+            const doc = new User({
                 firstName,
                 lastName,
                 email,
                 hashedPassword,
                 mobile
             });
+            await doc.save();
+            console.log('user created');
 
             res.status(201);
-            return res.json({message:'user created'});
+            return res.json({ message: 'user created' });
         }
 
     } catch (error) {
         res.status(500);
-        return res.json({message:'server error'});
+        return res.json({ message: 'server error' });
     }
 })
 
@@ -65,39 +74,44 @@ router.post('/signin', async (req, res) => {
         // Initial validation of body
         if (!email || !password) {
             res.status(400);
-            return res.json({message:'missing or wrong credentials'});
+            return res.json({ message: 'missing or wrong credentials' });
         }
 
         // checking if user exists in DB
-        const DbUser = await User.findAll({ where: { email: email } });
+        const DbUser = await User.find({ email: email }).exec();
+        console.log(DbUser);
 
         // If user exists , then validate and send confirmation or else send user not in DB    
         if (DbUser.length) {
 
             // comparing password of user and what is saved in DB
-            const isMatch = await bcrypt.compare(password, DbUser[0].dataValues.hashedPassword);
-
+            const isMatch = await bcrypt.compare(password, DbUser[0].hashedPassword);
+            console.log(isMatch);
             // If password matches
             if (isMatch) {
 
                 // Add JWT Token( will expire in 24 hrs )
-                const token = jwt.sign(DbUser[0].dataValues, process.env.SECRET, { expiresIn: '24h' });
+                console.log('jwt done start');
+                const { firstName , lastName , email , mobile } = DbUser[0];
+                const obj = { firstName , lastName , email , mobile};
+                const token = await jwt.sign(obj, process.env.SECRET, { expiresIn: '24h' });
+                console.log('jwt done end');
 
                 res.cookie('accessToken', token);
                 res.status(200);
-                return res.json({message:'user login done'});
+                return res.json({ message: 'user login done' });
             } else {
                 res.status(400);
-                return res.json({message:'user login failed'});
+                return res.json({ message: 'user login failed' });
             }
         } else {
             res.status(400);
-            return res.json({message:'user not in DB'});
+            return res.json({ message: 'user not in DB' });
         }
 
     } catch (error) {
         res.status(500);
-        return res.json({message:'server error'});
+        return res.json({ message: 'server error' });
     }
 })
 
@@ -112,9 +126,9 @@ router.get('/home', async (req, res) => {
         const { accessToken } = req.cookies;
 
         // if no cookies , then send no token found
-        if(!accessToken) {
+        if (!accessToken) {
             res.status(400);
-            return res.json({message:'no token'});
+            return res.json({ message: 'no token' });
         }
 
         // Verifies whether it is a valid JWT token
@@ -124,17 +138,20 @@ router.get('/home', async (req, res) => {
         if (decoded) {
 
             // Getting Questions from DB
-            const Questions = await Question.findAll();
-            const mappedQuestions = Questions.map(question => question.dataValues);
+            console.log('question find started');
+            const Questions = await Question.find().exec();
+            console.log('question find end');
+            console.log(Questions);
+            
             res.status(200);
-            return res.send(mappedQuestions);
+            return res.send(Questions);
         } else {
             res.status(400);
-            return res.json({message:'invalied token'});
+            return res.json({ message: 'invalied token' });
         }
     } catch (error) {
         res.status(500);
-        return res.json({message:'server error'});
+        return res.json({ message: 'server error' });
     }
 
 })
@@ -214,53 +231,56 @@ router.post('/user/:email', async (req, res) => {
 
 // To get all Questions from DB
 
-router.get('/admin/qsn',async (req,res)=>{
+router.get('/admin/qsn', async (req, res) => {
     try {
         // Get all questions from user DB
-        const Questions = await Question.findAll();
-        const mappedQuestions = Questions.map(question => question.dataValues);
+        console.log('question find started');
+        const Questions = await Question.find().exec();
+        console.log('question find end');
+        console.log(Questions);
         res.status(200);
-        res.send(mappedQuestions);
+        return res.send(Questions);
 
     } catch (error) {
         res.status(500);
-        return res.json({message:'server error'});
+        return res.json({ message: 'server error' });
     }
 })
 
 
 // To Create a Question in DB
 
-router.post('/admin/qsn',async (req,res)=>{
+router.post('/admin/qsn', async (req, res) => {
     try {
-    
+
         // Create a question in DB
-        await Question.create(req.body);
+        const qsn = new Question(req.body);
+        await qsn.save();
 
         res.status(201);
-        return res.json({message:'question created'});
+        return res.json({ message: 'question created' });
 
     } catch (error) {
         res.status(500);
-        return res.json({message:'server error'});
+        return res.json({ message: 'server error' });
     }
 })
 
 
 // Delete all questions from DB
 
-router.post('/admin/qsn/delete',async (req,res)=>{
+router.get('/admin/qsn/delete', async (req, res) => {
     try {
-    
+
         // Delete all items in Question DB
-        await Question.destroy();
+        await Question.deleteMany();
 
         res.status(200);
-        return res.json({message:'questions deleted'});
+        return res.json({ message: 'questions deleted' });
 
     } catch (error) {
         res.status(500);
-        return res.json({message:'server error'});
+        return res.json({ message: 'server error' });
     }
 })
 
@@ -268,17 +288,17 @@ router.post('/admin/qsn/delete',async (req,res)=>{
 
 // To get all users from DB
 
-router.get('/admin/user',async (req,res)=>{
+router.get('/admin/user', async (req, res) => {
     try {
         // Get all users from user DB
-        const Users = await User.findAll();
-        const mappedUsers = Users.map(user => user.dataValues);
+        const Users = await User.find();
+        
         res.status(200);
-        res.send(mappedUsers);
+        res.send(Users);
 
     } catch (error) {
         res.status(500);
-        return res.json({message:'server error'});
+        return res.json({ message: 'server error' });
     }
 })
 

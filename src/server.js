@@ -2,9 +2,8 @@ const express = require('express');
 const app = express();
 const cookieParser = require('cookie-parser');
 const router = require('./routes/index');
-const sequelize = require('./config/database');
-const Order = require('./models/order');
-const User = require('./models/user');
+const mongoose = require('mongoose');
+const mongo = require('./config/database');
 require('dotenv').config();
 
 app.use(express.urlencoded({ extended: false }));
@@ -12,17 +11,13 @@ app.use(express.json());
 app.use(cookieParser())
 
 
-// One to Many relationship in MYSQL DB
-User.hasMany(Order);
 
 
-// Mysql DB connection
+// Mongo DB connection
 const connectDB = async () => {
     try {
-        await sequelize.authenticate();
-        console.log('Connection has been established successfully.');
-        await sequelize.sync();  // todo remove {force:true} at end of dev effort
-        console.log('Tables created');
+        await mongoose.connect(mongo.url);
+        console.log('MongoDB Connected ...');
     } catch (error) {
         console.error('Unable to connect to the database:', error);
         connectDB();
@@ -31,7 +26,7 @@ const connectDB = async () => {
 }
 
 
-// Calling the function to connect MYSQL
+// Calling the function to connect MongoDB
 connectDB();
 
 
