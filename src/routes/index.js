@@ -162,65 +162,11 @@ router.get('/home', async (req, res) => {
 // User order Route
 router.post('/user/:email', async (req, res) => {
     try {
-        const { email } = req.params;
-        const { questionId, response, slotValue } = req.body;
-
-        if (!email || !questionId || !response || !slotValue) {
-            throw new Error(errorMessages.client);
-        }
-
-
-        // Getting question from DB
-
-        const question = await Question.findAll({ where: { id: questionId } });
-
-        if (question.length === 0) {
-            throw new Error(errorMessages.client);
-        }
-
-
-        // Update Question DB based on user response and available limit
-
-        if (response === 'yes') {
-            const currLimit = question[0].dataValues.yesLimit;
-
-            if (currLimit > 0) {
-                await Question.update({ yesLimit: currLimit - 1 }, { where: { id: questionId } });
-            } else {
-                return res.send('limit is exhausted');
-            }
-
-        } else {
-            const currLimit = question[0].dataValues.noLimit;
-
-            if (currLimit > 0) {
-                await Question.update({ noLimit: currLimit - 1 }, { where: { id: questionId } });
-            } else {
-                return res.send('limit is exhausted');
-            }
-        }
-
-
-        // To get the user details who has submitted the order
-
-        const DbUser = await User.findAll({ where: { email: email } });
-        const currPoints = DbUser[0].dataValues.points;
-
-
-        // Points of the user is updated. ( deducted according to slot value )
-
-        await User.update({ points: currPoints - slotValue }, { where: { email: email } });
-
-
-        // Order is created in Order table
-
-        await DbUser[0].createOrder(req.body);
-
-
-        return res.send('order created');
+        
 
     } catch (error) {
-        throw (error);
+        res.status(500);
+        return res.json({ message: 'server error' });
     }
 })
 
