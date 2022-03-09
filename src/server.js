@@ -4,8 +4,11 @@ const cookieParser = require('cookie-parser');
 const router = require('./routes/index');
 const mongoose = require('mongoose');
 const mongo = require('./config/database');
+const cors = require('cors');
 require('dotenv').config();
 
+
+app.use(cors({ origin: "*" }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(cookieParser())
@@ -46,9 +49,9 @@ app.use('*', (req, res) => {
 // To handle error in request ( if any uncaught )
 app.use((err, req, res, next) => {
 
-    if(err) {
+    if (err) {
         res.status(500);
-        return res.json({message:'server error'});
+        return res.json({ message: 'server error' });
     }
 
 })
