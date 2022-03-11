@@ -27,6 +27,11 @@ const userSchema = new Schema({
         required: true,
         unique: true
     },
+    bids: {
+        type: [Object],
+        required: false,
+        default: []
+    },
     wallet: {
         type: Number,
         required: false

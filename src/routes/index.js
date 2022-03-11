@@ -4,6 +4,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 const Question = require('../models/question');
+const Order = require('../models/order');
+const dynamicPrice = require('../helpers/index');
 require('dotenv').config();
 
 // Test Page
@@ -92,8 +94,8 @@ router.post('/signin', async (req, res) => {
 
                 // Add JWT Token( will expire in 24 hrs )
                 console.log('jwt done start');
-                const { firstName , lastName , email , mobile } = DbUser[0];
-                const obj = { firstName , lastName , email , mobile};
+                const { firstName, lastName, email, mobile } = DbUser[0];
+                const obj = { firstName, lastName, email, mobile };
                 const token = await jwt.sign(obj, process.env.SECRET, { expiresIn: '24h' });
                 console.log('jwt done end');
 
@@ -142,7 +144,7 @@ router.get('/home', async (req, res) => {
             const Questions = await Question.find().exec();
             console.log('question find end');
             console.log(Questions);
-            
+
             res.status(200);
             return res.send(Questions);
         } else {
@@ -158,11 +160,467 @@ router.get('/home', async (req, res) => {
 
 
 /* -------------------User Order Route----------------- */
-// todo
+
 // User order Route
-router.post('/user/:email', async (req, res) => {
+router.post('/user/:customerEmail', async (req, res) => {
     try {
-        
+
+        // Taking total price ( yes + no ) to be 100
+
+        const totalPrice = 100;
+
+        // Checking if cookie is in the request
+        const { accessToken } = req.cookies;
+
+        // if no cookies , then send no token found
+        if (!accessToken) {
+            res.status(400);
+            return res.json({ message: 'no token' });
+        }
+
+        const { customerEmail } = req.query;
+        const { questionName, customerResponse, orderPrice, orderQuantity } = req.body;
+
+        if (!customerEmail || !questionName || !customerResponse || !orderPrice || !orderQuantity) {
+            res.status(400);
+            return res.json({ message: 'missing or wrong credentials' });
+        }
+
+
+        // Verifies whether it is a valid JWT token
+        const decoded = jwt.verify(accessToken, process.env.SECRET);
+
+
+        // If token is valid , then provide all questions to FE , else send a failed message
+        if (decoded) {
+
+
+            
+
+            // Creating order object for the new  customer
+            const orderObject = {
+                questionName,
+                customerEmail,
+                customerResponse,
+                orderPrice,
+                orderQuantity
+            }
+
+            // calling dynamicPrice function to update the price
+
+            await dynamicPrice(customerResponse,orderQuantity,questionName);
+
+
+            // Checking if for a particular question , opposite order is there which is pending for a match
+
+            if (customerResponse === 'yes') {
+
+                const oppositeOrder = await Order.findOne({
+                    questionName,
+                    "orderPrice": totalPrice - orderObject.orderPrice,
+                    "customerResponse": 'no'
+                }).exec();
+
+                if (oppositeOrder) {
+
+                    const oldOrderQuantity = oppositeOrder.orderQuantity;
+                    const newOrderQuantity = orderObject.orderQuantity;
+
+                    // if quantity of both old and new is same
+
+                    if (oldOrderQuantity == newOrderQuantity) {
+
+                        // delete the old order from Order DB
+
+                        await Order.findByIdAndDelete(oppositeOrder._id).exec();
+
+
+                        // update old user and update bidStatus as 'match'
+
+                        const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
+
+                        const Newbids = [
+                            ...oldUser.bids,
+                            {
+                                questionName: oppositeOrder.questionName,
+                                orderPrice: oppositeOrder.orderPrice,
+                                orderQuantity: oppositeOrder.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedUser = await User.findByIdAndUpdate(oldUser._id, { bids: Newbids }, { new: true });
+
+
+                        // insert the bid in new user bids array with bidStatus as 'match'
+
+                        const newUser = await User.findOne({ email: orderObject.customerEmail }).exec();
+
+                        const NewUserbids = [
+                            ...newUser.bids,
+                            {
+                                questionName: orderObject.questionName,
+                                orderPrice: orderObject.orderPrice,
+                                orderQuantity: orderObject.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedNewUser = await User.findByIdAndUpdate(newUser._id, { bids: NewUserbids }, { new: true });
+
+                        res.status(200);
+                        return res.json({ message: 'order match done' });
+
+                    } else if (oldOrderQuantity > newOrderQuantity) {
+
+                        // update the old order orderQuantity in DB
+
+                        await Order.findByIdAndUpdate(oppositeOrder._id, {
+                            "orderQuantity": oldOrderQuantity - newOrderQuantity
+                        }, { new: true });
+
+
+                        // update old user and update bidStatus as 'match'
+
+                        const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
+
+                        const Newbids = [
+                            ...oldUser.bids,
+                            {
+                                questionName: oppositeOrder.questionName,
+                                orderPrice: oppositeOrder.orderPrice,
+                                orderQuantity: orderObject.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedUser = await User.findByIdAndUpdate(oldUser._id, { bids: Newbids }, { new: true });
+
+
+                        // insert the bid in new user bids array with bidStatus as 'match'
+
+                        const newUser = await User.findOne({ email: orderObject.customerEmail }).exec();
+
+                        const NewUserbids = [
+                            ...newUser.bids,
+                            {
+                                questionName: orderObject.questionName,
+                                orderPrice: orderObject.orderPrice,
+                                orderQuantity: orderObject.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedNewUser = await User.findByIdAndUpdate(newUser._id, { bids: NewUserbids }, { new: true });
+
+                        res.status(200);
+                        return res.json({ message: 'order match done' });
+
+
+
+                    } else {
+
+                        // delete the old order from Order DB
+
+                        await Order.findByIdAndDelete(oppositeOrder._id).exec();
+
+
+                        // create order in Order DB for remaining quantities
+
+                        const doc = new Order({
+                            questionName: orderObject.questionName,
+                            customerEmail: orderObject.customerEmail,
+                            customerResponse: orderObject.customerResponse,
+                            orderPrice: orderObject.orderPrice,
+                            orderQuantity: orderObject.orderQuantity - oppositeOrder.orderQuantity
+                        });
+
+                        await doc.save();
+
+
+                        // update old user and update bidStatus as 'match'
+
+                        const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
+
+                        const Newbids = [
+                            ...oldUser.bids,
+                            {
+                                questionName: oppositeOrder.questionName,
+                                orderPrice: oppositeOrder.orderPrice,
+                                orderQuantity: oppositeOrder.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedUser = await User.findByIdAndUpdate(oldUser._id, { bids: Newbids }, { new: true });
+
+
+                        // insert the bid in new user bids array with bidStatus as 'match'
+
+                        const newUser = await User.findOne({ email: orderObject.customerEmail }).exec();
+
+                        const NewUserbids = [
+                            ...newUser.bids,
+                            {
+                                questionName: orderObject.questionName,
+                                orderPrice: orderObject.orderPrice,
+                                orderQuantity: oppositeOrder.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedNewUser = await User.findByIdAndUpdate(newUser._id, { bids: NewUserbids }, { new: true });
+
+
+                        res.status(200);
+                        return res.json({
+                            message: 'order partial match',
+                            matchedQuantity: oppositeOrder.orderQuantity,
+                            pendingQuantity: orderObject.orderQuantity - oppositeOrder.orderQuantity
+                        });
+
+                    }
+
+                } else {
+
+                    // create order in Order DB for all quantities
+
+                    const doc = new Order({
+                        questionName: orderObject.questionName,
+                        customerEmail: orderObject.customerEmail,
+                        customerResponse: orderObject.customerResponse,
+                        orderPrice: orderObject.orderPrice,
+                        orderQuantity: orderObject.orderQuantity
+                    });
+
+                    await doc.save();
+
+
+                    res.status(200);
+                    return res.json({ message: 'order unmatch' });
+                }
+
+
+
+            } else {
+
+                const oppositeOrder = await Order.findOne({
+                    questionName,
+                    "orderPrice": totalPrice - orderObject.orderPrice,
+                    "customerResponse": 'yes'
+                }).exec();
+
+                if (oppositeOrder) {
+
+                    const oldOrderQuantity = oppositeOrder.orderQuantity;
+                    const newOrderQuantity = orderObject.orderQuantity;
+
+                    // if quantity of both old and new is same
+
+                    if (oldOrderQuantity == newOrderQuantity) {
+
+                        // delete the old order from Order DB
+
+                        await Order.findByIdAndDelete(oppositeOrder._id).exec();
+
+
+                        // update old user and update bidStatus as 'match'
+
+                        const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
+
+                        const Newbids = [
+                            ...oldUser.bids,
+                            {
+                                questionName: oppositeOrder.questionName,
+                                orderPrice: oppositeOrder.orderPrice,
+                                orderQuantity: oppositeOrder.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedUser = await User.findByIdAndUpdate(oldUser._id, { bids: Newbids }, { new: true });
+
+
+                        // insert the bid in new user bids array with bidStatus as 'match'
+
+                        const newUser = await User.findOne({ email: orderObject.customerEmail }).exec();
+
+                        const NewUserbids = [
+                            ...newUser.bids,
+                            {
+                                questionName: orderObject.questionName,
+                                orderPrice: orderObject.orderPrice,
+                                orderQuantity: orderObject.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedNewUser = await User.findByIdAndUpdate(newUser._id, { bids: NewUserbids }, { new: true });
+
+                        res.status(200);
+                        return res.json({ message: 'order match done' });
+
+                    } else if (oldOrderQuantity > newOrderQuantity) {
+
+                        // update the old order orderQuantity in DB
+
+                        await Order.findByIdAndUpdate(oppositeOrder._id, {
+                            "orderQuantity": oldOrderQuantity - newOrderQuantity
+                        }, { new: true });
+
+
+                        // update old user and update bidStatus as 'match'
+
+                        const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
+
+                        const Newbids = [
+                            ...oldUser.bids,
+                            {
+                                questionName: oppositeOrder.questionName,
+                                orderPrice: oppositeOrder.orderPrice,
+                                orderQuantity: orderObject.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedUser = await User.findByIdAndUpdate(oldUser._id, { bids: Newbids }, { new: true });
+
+
+                        // insert the bid in new user bids array with bidStatus as 'match'
+
+                        const newUser = await User.findOne({ email: orderObject.customerEmail }).exec();
+
+                        const NewUserbids = [
+                            ...newUser.bids,
+                            {
+                                questionName: orderObject.questionName,
+                                orderPrice: orderObject.orderPrice,
+                                orderQuantity: orderObject.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedNewUser = await User.findByIdAndUpdate(newUser._id, { bids: NewUserbids }, { new: true });
+
+                        res.status(200);
+                        return res.json({ message: 'order match done' });
+
+
+
+                    } else {
+
+                        // delete the old order from Order DB
+
+                        await Order.findByIdAndDelete(oppositeOrder._id).exec();
+
+
+                        // create order in Order DB for remaining quantities
+
+                        const doc = new Order({
+                            questionName: orderObject.questionName,
+                            customerEmail: orderObject.customerEmail,
+                            customerResponse: orderObject.customerResponse,
+                            orderPrice: orderObject.orderPrice,
+                            orderQuantity: orderObject.orderQuantity - oppositeOrder.orderQuantity
+                        });
+
+                        await doc.save();
+
+
+                        // update old user and update bidStatus as 'match'
+
+                        const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
+
+                        const Newbids = [
+                            ...oldUser.bids,
+                            {
+                                questionName: oppositeOrder.questionName,
+                                orderPrice: oppositeOrder.orderPrice,
+                                orderQuantity: oppositeOrder.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedUser = await User.findByIdAndUpdate(oldUser._id, { bids: Newbids }, { new: true });
+
+
+                        // insert the bid in new user bids array with bidStatus as 'match'
+
+                        const newUser = await User.findOne({ email: orderObject.customerEmail }).exec();
+
+                        const NewUserbids = [
+                            ...newUser.bids,
+                            {
+                                questionName: orderObject.questionName,
+                                orderPrice: orderObject.orderPrice,
+                                orderQuantity: oppositeOrder.orderQuantity,
+                                orderStatus: 'match'
+
+                            }
+
+                        ]
+
+                        const updatedNewUser = await User.findByIdAndUpdate(newUser._id, { bids: NewUserbids }, { new: true });
+
+
+                        res.status(200);
+                        return res.json({
+                            message: 'order partial match',
+                            matchedQuantity: oppositeOrder.orderQuantity,
+                            pendingQuantity: orderObject.orderQuantity - oppositeOrder.orderQuantity
+                        });
+
+                    }
+
+                } else {
+
+                    // create order in Order DB for all quantities
+
+                    const doc = new Order({
+                        questionName: orderObject.questionName,
+                        customerEmail: orderObject.customerEmail,
+                        customerResponse: orderObject.customerResponse,
+                        orderPrice: orderObject.orderPrice,
+                        orderQuantity: orderObject.orderQuantity
+                    });
+
+                    await doc.save();
+
+
+                    res.status(200);
+                    return res.json({ message: 'order unmatch' });
+                }
+            }
+
+
+        } else {
+            res.status(400);
+            return res.json({ message: 'invalied token' });
+        }
+
+
 
     } catch (error) {
         res.status(500);
@@ -238,7 +696,7 @@ router.get('/admin/user', async (req, res) => {
     try {
         // Get all users from user DB
         const Users = await User.find();
-        
+
         res.status(200);
         res.send(Users);
 
@@ -247,24 +705,6 @@ router.get('/admin/user', async (req, res) => {
         return res.json({ message: 'server error' });
     }
 })
-
-
-/* -------------------Deposit and Withdrawal routes----------------- */
-
-
-// Money Deposit Route
-// todo
-router.post('/deposit/:email', (req, res) => {
-
-})
-
-
-// Money Withdraw Route
-// todo
-router.post('/withdraw/:email', (req, res) => {
-
-})
-
 
 
 module.exports = router;
