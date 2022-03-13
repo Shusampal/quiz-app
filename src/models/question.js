@@ -10,10 +10,6 @@ const questionSchema = new Schema({
     type: String,
     required: true
   },
-  logoUrl: {
-    type: String,
-    required: true
-  },
   yesValue: {
     type: Number,
     required: true

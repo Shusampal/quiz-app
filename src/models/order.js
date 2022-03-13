@@ -22,6 +22,10 @@ const orderSchema = new Schema({
   orderQuantity: {
     type: Number,
     required: true
+  },
+  cancel: {
+    type:Boolean,
+    required:false
   }
 });
 

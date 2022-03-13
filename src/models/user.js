@@ -28,13 +28,14 @@ const userSchema = new Schema({
         unique: true
     },
     bids: {
-        type: [Object],
+        type: mongoose.Schema.Types.Mixed,
         required: false,
         default: []
     },
     wallet: {
         type: Number,
-        required: false
+        required: false,
+        default: 25
     }
 
 }, { timestamps: true })

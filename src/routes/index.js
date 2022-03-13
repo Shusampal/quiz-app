@@ -5,7 +5,9 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 const Question = require('../models/question');
 const Order = require('../models/order');
-const dynamicPrice = require('../helpers/index');
+const dynamicPrice = require('../helpers/dynamicPrice');
+const cancelOrder = require('../helpers/cancelOrder');
+const { findByIdAndUpdate } = require('../models/user');
 require('dotenv').config();
 
 // Test Page
@@ -94,14 +96,23 @@ router.post('/signin', async (req, res) => {
 
                 // Add JWT Token( will expire in 24 hrs )
                 console.log('jwt done start');
+                console.log(DbUser[0]);
                 const { firstName, lastName, email, mobile } = DbUser[0];
                 const obj = { firstName, lastName, email, mobile };
                 const token = await jwt.sign(obj, process.env.SECRET, { expiresIn: '24h' });
                 console.log('jwt done end');
 
+                const userObj = {
+                    firstName: DbUser[0].firstName,
+                    lastName: DbUser[0].lastName,
+                    email: DbUser[0].email,
+                    mobile: DbUser[0].mobile,
+                    wallet: DbUser[0].wallet,
+                    bids: DbUser[0].bids
+                }
                 res.cookie('accessToken', token);
                 res.status(200);
-                return res.json({ message: 'user login done' });
+                return res.json({ message: 'user login done', userObj });
             } else {
                 res.status(400);
                 return res.json({ message: 'user login failed' });
@@ -141,7 +152,7 @@ router.get('/home', async (req, res) => {
 
             // Getting Questions from DB
             console.log('question find started');
-            const Questions = await Question.find().exec();
+            const Questions = await Question.find().lean();
             console.log('question find end');
             console.log(Questions);
 
@@ -159,7 +170,7 @@ router.get('/home', async (req, res) => {
 })
 
 
-/* -------------------User Order Route----------------- */
+/* -------------------User Order and Cancel Route----------------- */
 
 // User order Route
 router.post('/user/:customerEmail', async (req, res) => {
@@ -178,7 +189,9 @@ router.post('/user/:customerEmail', async (req, res) => {
             return res.json({ message: 'no token' });
         }
 
-        const { customerEmail } = req.query;
+        console.log(req.params);
+        console.log(req.body);
+        const { customerEmail } = req.params;
         const { questionName, customerResponse, orderPrice, orderQuantity } = req.body;
 
         if (!customerEmail || !questionName || !customerResponse || !orderPrice || !orderQuantity) {
@@ -194,9 +207,6 @@ router.post('/user/:customerEmail', async (req, res) => {
         // If token is valid , then provide all questions to FE , else send a failed message
         if (decoded) {
 
-
-            
-
             // Creating order object for the new  customer
             const orderObject = {
                 questionName,
@@ -208,7 +218,7 @@ router.post('/user/:customerEmail', async (req, res) => {
 
             // calling dynamicPrice function to update the price
 
-            await dynamicPrice(customerResponse,orderQuantity,questionName);
+            await dynamicPrice(customerResponse, orderQuantity, questionName);
 
 
             // Checking if for a particular question , opposite order is there which is pending for a match
@@ -221,21 +231,31 @@ router.post('/user/:customerEmail', async (req, res) => {
                     "customerResponse": 'no'
                 }).exec();
 
+
+
                 if (oppositeOrder) {
 
                     const oldOrderQuantity = oppositeOrder.orderQuantity;
                     const newOrderQuantity = orderObject.orderQuantity;
 
+
                     // if quantity of both old and new is same
 
                     if (oldOrderQuantity == newOrderQuantity) {
+
+                        // checking if old order from DB is cancelled order initiated or not
+
+                        if (oppositeOrder.cancel === true) {
+                            return await cancelOrder(oppositeOrder, orderObject, customerResponse);
+
+                        }
 
                         // delete the old order from Order DB
 
                         await Order.findByIdAndDelete(oppositeOrder._id).exec();
 
 
-                        // update old user and update bidStatus as 'match'
+                        // update old user and insert in  bids array in User model
 
                         const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
 
@@ -245,6 +265,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: oppositeOrder.questionName,
                                 orderPrice: oppositeOrder.orderPrice,
                                 orderQuantity: oppositeOrder.orderQuantity,
+                                orderResponse: oppositeOrder.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -264,6 +285,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: orderObject.questionName,
                                 orderPrice: orderObject.orderPrice,
                                 orderQuantity: orderObject.orderQuantity,
+                                orderResponse: orderObject.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -271,6 +293,9 @@ router.post('/user/:customerEmail', async (req, res) => {
                         ]
 
                         const updatedNewUser = await User.findByIdAndUpdate(newUser._id, { bids: NewUserbids }, { new: true });
+
+
+
 
                         res.status(200);
                         return res.json({ message: 'order match done' });
@@ -284,7 +309,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                         }, { new: true });
 
 
-                        // update old user and update bidStatus as 'match'
+                        // update old user and insert in  bids array in User model
 
                         const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
 
@@ -294,6 +319,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: oppositeOrder.questionName,
                                 orderPrice: oppositeOrder.orderPrice,
                                 orderQuantity: orderObject.orderQuantity,
+                                orderResponse: oppositeOrder.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -313,6 +339,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: orderObject.questionName,
                                 orderPrice: orderObject.orderPrice,
                                 orderQuantity: orderObject.orderQuantity,
+                                orderResponse: orderObject.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -333,7 +360,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                         await Order.findByIdAndDelete(oppositeOrder._id).exec();
 
 
-                        // create order in Order DB for remaining quantities
+                        // create order in Order DB for remaining quantities for new customer
 
                         const doc = new Order({
                             questionName: orderObject.questionName,
@@ -346,7 +373,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                         await doc.save();
 
 
-                        // update old user and update bidStatus as 'match'
+                        // update old user and insert in  bids array in User model.
 
                         const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
 
@@ -356,6 +383,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: oppositeOrder.questionName,
                                 orderPrice: oppositeOrder.orderPrice,
                                 orderQuantity: oppositeOrder.orderQuantity,
+                                orderResponse: oppositeOrder.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -375,6 +403,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: orderObject.questionName,
                                 orderPrice: orderObject.orderPrice,
                                 orderQuantity: oppositeOrder.orderQuantity,
+                                orderResponse: orderObject.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -427,16 +456,26 @@ router.post('/user/:customerEmail', async (req, res) => {
                     const oldOrderQuantity = oppositeOrder.orderQuantity;
                     const newOrderQuantity = orderObject.orderQuantity;
 
+
+
+
                     // if quantity of both old and new is same
 
                     if (oldOrderQuantity == newOrderQuantity) {
+
+                        // checking if old order from DB is cancelled order initiated or not
+
+                        if (oppositeOrder.cancel === true) {
+                            return await cancelOrder(oppositeOrder, orderObject, customerResponse);
+
+                        }
 
                         // delete the old order from Order DB
 
                         await Order.findByIdAndDelete(oppositeOrder._id).exec();
 
 
-                        // update old user and update bidStatus as 'match'
+                        // update old user and insert in  bids array in User model
 
                         const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
 
@@ -446,6 +485,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: oppositeOrder.questionName,
                                 orderPrice: oppositeOrder.orderPrice,
                                 orderQuantity: oppositeOrder.orderQuantity,
+                                orderResponse: oppositeOrder.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -465,6 +505,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: orderObject.questionName,
                                 orderPrice: orderObject.orderPrice,
                                 orderQuantity: orderObject.orderQuantity,
+                                orderResponse: orderObject.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -485,7 +526,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                         }, { new: true });
 
 
-                        // update old user and update bidStatus as 'match'
+                        // update old user and insert in  bids array in User model.
 
                         const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
 
@@ -495,6 +536,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: oppositeOrder.questionName,
                                 orderPrice: oppositeOrder.orderPrice,
                                 orderQuantity: orderObject.orderQuantity,
+                                orderResponse: oppositeOrder.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -514,6 +556,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: orderObject.questionName,
                                 orderPrice: orderObject.orderPrice,
                                 orderQuantity: orderObject.orderQuantity,
+                                orderResponse: orderObject.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -547,7 +590,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                         await doc.save();
 
 
-                        // update old user and update bidStatus as 'match'
+                        // update old user and insert in  bids array in User model.
 
                         const oldUser = await User.findOne({ email: oppositeOrder.customerEmail }).exec();
 
@@ -557,6 +600,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: oppositeOrder.questionName,
                                 orderPrice: oppositeOrder.orderPrice,
                                 orderQuantity: oppositeOrder.orderQuantity,
+                                orderResponse: oppositeOrder.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -576,6 +620,7 @@ router.post('/user/:customerEmail', async (req, res) => {
                                 questionName: orderObject.questionName,
                                 orderPrice: orderObject.orderPrice,
                                 orderQuantity: oppositeOrder.orderQuantity,
+                                orderResponse: orderObject.customerResponse,
                                 orderStatus: 'match'
 
                             }
@@ -630,6 +675,84 @@ router.post('/user/:customerEmail', async (req, res) => {
 
 
 
+// User order cancel Route
+router.post('/user/cancel/:customerEmail', async (req, res) => {
+    try {
+
+        // Taking total price ( yes + no ) to be 100
+
+        const totalPrice = 100;
+
+        // Checking if cookie is in the request
+        const { accessToken } = req.cookies;
+
+        // if no cookies , then send no token found
+        if (!accessToken) {
+            res.status(400);
+            return res.json({ message: 'no token' });
+        }
+
+        console.log(req.params);
+        console.log(req.body);
+        const { customerEmail } = req.params;
+        const { questionName, customerResponse, orderPrice, orderQuantity, cancel } = req.body;
+
+        if (!customerEmail || !questionName || !customerResponse || !orderPrice || !orderQuantity || !cancel) {
+            res.status(400);
+            return res.json({ message: 'missing or wrong credentials' });
+        }
+
+
+        // Verifies whether it is a valid JWT token
+        const decoded = jwt.verify(accessToken, process.env.SECRET);
+
+
+        // If token is valid , then provide all questions to FE , else send a failed message
+
+        if (decoded) {
+
+            console.log("Is Decoded");
+
+            // Creating order object for the new  customer
+            const orderObject = {
+                questionName,
+                customerEmail,
+                customerResponse,
+                orderPrice,
+                orderQuantity
+            }
+
+            // calling dynamicPrice function to update the price
+
+            console.log("calling dynamic price");
+
+            await dynamicPrice(customerResponse, orderQuantity, questionName);
+
+            console.log("called dynamic price");
+
+
+            // New Customer Pending order update from Order model ( put cancel : true )
+            await Order.findOneAndUpdate(orderObject, { cancel: true }).exec();
+
+
+            res.status(200);
+            return res.json({ message: 'cancel order initiated' });
+
+
+
+        } else {
+            res.status(400);
+            return res.json({ message: 'invalied token' });
+        }
+
+
+    } catch (error) {
+        res.status(500);
+        return res.json({ message: 'server error' });
+    }
+})
+
+
 /* --------------Admin Panel Routes------------------- */
 
 
@@ -639,7 +762,7 @@ router.get('/admin/qsn', async (req, res) => {
     try {
         // Get all questions from user DB
         console.log('question find started');
-        const Questions = await Question.find().exec();
+        const Questions = await Question.find().lean();
         console.log('question find end');
         console.log(Questions);
         res.status(200);
