@@ -246,7 +246,9 @@ router.post('/user/:customerEmail', async (req, res) => {
                         // checking if old order from DB is cancelled order initiated or not
 
                         if (oppositeOrder.cancel === true) {
-                            return await cancelOrder(oppositeOrder, orderObject, customerResponse);
+                            await cancelOrder(oppositeOrder, orderObject, customerResponse);
+                            res.status(200);
+                            return res.json({ message: 'order match done' });
 
                         }
 
@@ -466,7 +468,9 @@ router.post('/user/:customerEmail', async (req, res) => {
                         // checking if old order from DB is cancelled order initiated or not
 
                         if (oppositeOrder.cancel === true) {
-                            return await cancelOrder(oppositeOrder, orderObject, customerResponse);
+                            await cancelOrder(oppositeOrder, orderObject, customerResponse);
+                            res.status(200);
+                            return res.json({ message: 'order match done' });
 
                         }
 
