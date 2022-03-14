@@ -787,7 +787,21 @@ router.post('/admin/qsn', async (req, res) => {
         // Create a question in DB
 
         console.log(req.body);
-        const qsn = new Question(req.body);
+
+        const { name , description , yesValue , noValue } = req.body;
+
+        const expiryDate = req.body.expiryDate.toString();
+        const expiryTime = req.body.expiryTime.toString();
+
+        const qsn = new Question({
+            name,
+            description,
+            yesValue,
+            expiryDate,
+            expiryTime,
+            yesValue,
+            noValue
+        });
         await qsn.save();
 
         res.status(201);

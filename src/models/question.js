@@ -10,8 +10,12 @@ const questionSchema = new Schema({
     type: String,
     required: true
   },
+  expiryDate: {
+    type: String,
+    required: true
+  },
   expiryTime: {
-    type: Date,
+    type: String,
     required: true
   },
   yesValue: {
