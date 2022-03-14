@@ -785,6 +785,8 @@ router.post('/admin/qsn', async (req, res) => {
     try {
 
         // Create a question in DB
+
+        console.log(req.body);
         const qsn = new Question(req.body);
         await qsn.save();
 
@@ -826,6 +828,40 @@ router.get('/admin/user', async (req, res) => {
 
         res.status(200);
         res.send(Users);
+
+    } catch (error) {
+        res.status(500);
+        return res.json({ message: 'server error' });
+    }
+})
+
+
+// To update the wallet of a User in DB
+
+router.post('/admin/user', async (req, res) => {
+    try {
+
+        // Create a question in DB
+
+        console.log(req.body);
+
+        const { email , updateAmount } = req.body;
+
+
+        // find the user in DB
+
+        const user = await User.findOne({email}).exec();
+
+        const oldWallet = user.wallet;
+        
+        const newWallet = oldWallet + updateAmount;
+
+        // update the wallet in DB
+
+        await findByIdAndUpdate({_id:user._id},{wallet:newWallet}).exec();
+
+        res.status(201);
+        return res.json({ message: 'wallet updated' });
 
     } catch (error) {
         res.status(500);

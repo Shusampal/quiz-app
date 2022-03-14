@@ -10,6 +10,10 @@ const questionSchema = new Schema({
     type: String,
     required: true
   },
+  expiryTime: {
+    type: Date,
+    required: true
+  },
   yesValue: {
     type: Number,
     required: true
