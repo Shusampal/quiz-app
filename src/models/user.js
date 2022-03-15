@@ -18,9 +18,10 @@ const userSchema = new Schema({
         required: true,
         unique: true
     },
-    dateOfBirth: {
+    gender: {
         type: String,
-        required:true
+        required: true,
+        enum: ['M', 'F']
     },
     hashedPassword: {
         type: String,
@@ -30,6 +31,11 @@ const userSchema = new Schema({
         type: Number,
         required: true,
         unique: true
+    },
+    kyc: {
+        type: mongoose.Schema.Types.Mixed,
+        required: false,
+        default: {}
     },
     bids: {
         type: mongoose.Schema.Types.Mixed,

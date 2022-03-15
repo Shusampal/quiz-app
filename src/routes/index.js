@@ -12,6 +12,8 @@ const isQuestionExpired = require('../helpers/isQuestionExpired');
 const { findByIdAndUpdate } = require('../models/user');
 require('dotenv').config();
 
+const upload = multer({ dest: 'uploads/' });
+
 // Test Page
 router.get('/', (req, res) => {
 
@@ -31,10 +33,10 @@ router.get('/', (req, res) => {
 // Signup Route
 router.post('/signup', async (req, res) => {
     try {
-        const { firstName, lastName, email, password, mobile , dateOfBirth} = req.body;
+        const { firstName, lastName, email, password, mobile, gender } = req.body;
 
         // Initial validation of body
-        if (!email || !password || !mobile || !firstName || !lastName || !dateOfBirth) {
+        if (!email || !password || !mobile || !firstName || !lastName || !gender) {
             res.status(400);
             return res.json({ message: 'missing or wrong credentials' });
         }
@@ -62,7 +64,7 @@ router.post('/signup', async (req, res) => {
                 firstName,
                 lastName,
                 email,
-                dateOfBirth,
+                gender,
                 hashedPassword,
                 mobile
             });
@@ -117,10 +119,13 @@ router.post('/signin', async (req, res) => {
                     lastName: DbUser[0].lastName,
                     email: DbUser[0].email,
                     mobile: DbUser[0].mobile,
+                    gender: DbUser[0].gender,
                     wallet: DbUser[0].wallet,
+                    kyc: DbUser[0].kyc,
                     bids: DbUser[0].bids
                 }
                 res.cookie('accessToken', token);
+                res.cookie('email', DbUser[0].email);
                 res.status(200);
                 return res.json({ message: 'user login done', userObj });
             } else {
@@ -131,6 +136,67 @@ router.post('/signin', async (req, res) => {
             res.status(400);
             return res.json({ message: 'user not in DB' });
         }
+
+    } catch (error) {
+        res.status(500);
+        return res.json({ message: 'server error' });
+    }
+})
+
+
+
+/* -------------------User KYC Route------------------ */
+
+
+router.post('/kyc', upload.single('avatar'), async (req, res) => {
+    try {
+
+        console.log("kyc is hit");
+
+        const { userName, dateOfBirth, panNumber } = req.body;
+
+        // Initial validation of body
+        if (!userName || !dateOfBirth || !panNumber) {
+            res.status(400);
+            return res.json({ message: 'missing or wrong credentials' });
+        }
+
+        // Checking if cookie is in the request
+        const { accessToken, email } = req.cookies;
+
+        // if no cookies , then send no token found
+        if (!accessToken) {
+            res.status(400);
+            return res.json({ message: 'no token' });
+        }
+
+        // Verifies whether it is a valid JWT token
+        const decoded = jwt.verify(accessToken, process.env.SECRET);
+
+        console.log("Decoded", decoded);
+
+        if (decoded) {
+
+            console.log("user fetching");
+            const user = await User.findOne({ email: req.cookies.email }).exec();
+            console.log("user fetched");
+
+            // Update user in DB
+
+            const newKyc = {
+                ...req.body
+            }
+
+            await User.findByIdAndUpdate({ _id: user._id }, { kyc: newKyc }).exec();
+            res.status(200);
+            return res.json({ message: 'kyc done' });
+
+
+        } else {
+            res.status(400);
+            return res.json({ message: 'invalied token' });
+        }
+
 
     } catch (error) {
         res.status(500);
@@ -183,7 +249,7 @@ router.get('/home', async (req, res) => {
 /* -------------------User Order and Cancel Route----------------- */
 
 // User order Route
-router.post('/user/:customerEmail', async (req, res) => {
+router.post('/user/order', async (req, res) => {
     try {
 
 
@@ -216,7 +282,7 @@ router.post('/user/:customerEmail', async (req, res) => {
 
         console.log(req.params);
         console.log(req.body);
-        const { customerEmail } = req.params;
+        const customerEmail = req.cookies.email;
         const { questionName, customerResponse, orderPrice, orderQuantity } = req.body;
 
         if (!customerEmail || !questionName || !customerResponse || !orderPrice || !orderQuantity) {
@@ -705,7 +771,7 @@ router.post('/user/:customerEmail', async (req, res) => {
 
 
 // User order cancel Route
-router.post('/user/cancel/:customerEmail', async (req, res) => {
+router.post('/user/cancel', async (req, res) => {
     try {
 
         // checking if question is expired or not 
@@ -737,7 +803,7 @@ router.post('/user/cancel/:customerEmail', async (req, res) => {
 
         console.log(req.params);
         console.log(req.body);
-        const { customerEmail } = req.params;
+        const customerEmail = req.cookies.email;
         const { questionName, customerResponse, orderPrice, orderQuantity, cancel } = req.body;
 
         if (!customerEmail || !questionName || !customerResponse || !orderPrice || !orderQuantity || !cancel) {
@@ -906,6 +972,59 @@ router.post('/admin/user', async (req, res) => {
 
         res.status(201);
         return res.json({ message: 'wallet updated' });
+
+    } catch (error) {
+        res.status(500);
+        return res.json({ message: 'server error' });
+    }
+})
+
+
+// To get all users who have bidded for a particular question
+
+router.post('/result', async (req, res) => {
+    try {
+
+        // Create a question in DB
+
+        console.log(req.body);
+
+        const { name } = req.body;
+
+
+        // find the question in DB
+
+        const qsn = await Question.findOne({ name }).exec();
+
+
+        // find all users who have bidded for a particular qsn
+
+        const AllUsers = await User.find({}).lean();
+
+        console.log("ALLUsers");
+
+
+        let biddedUsers = [];
+
+
+        for (let user of AllUsers) {
+            console.log("user is =====> ", JSON.stringify(user));
+
+            const bidsArray = user.bids;
+
+            const orders = await bidsArray.filter(bid => bid.questionName === name);
+
+            const object = {
+                "user email": user.email,
+                "user mobile": user.mobile,
+                "user orders": orders
+            }
+
+            biddedUsers.push(object);
+        }
+
+        res.status(201);
+        return res.json(biddedUsers);
 
     } catch (error) {
         res.status(500);
