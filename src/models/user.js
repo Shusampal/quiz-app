@@ -18,6 +18,10 @@ const userSchema = new Schema({
         required: true,
         unique: true
     },
+    dateOfBirth: {
+        type: String,
+        required:true
+    },
     hashedPassword: {
         type: String,
         required: true

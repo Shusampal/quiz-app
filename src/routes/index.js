@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 const Question = require('../models/question');
@@ -30,10 +31,10 @@ router.get('/', (req, res) => {
 // Signup Route
 router.post('/signup', async (req, res) => {
     try {
-        const { firstName, lastName, email, password, mobile } = req.body;
+        const { firstName, lastName, email, password, mobile , dateOfBirth} = req.body;
 
         // Initial validation of body
-        if (!email || !password || !mobile || !firstName || !lastName) {
+        if (!email || !password || !mobile || !firstName || !lastName || !dateOfBirth) {
             res.status(400);
             return res.json({ message: 'missing or wrong credentials' });
         }
@@ -61,6 +62,7 @@ router.post('/signup', async (req, res) => {
                 firstName,
                 lastName,
                 email,
+                dateOfBirth,
                 hashedPassword,
                 mobile
             });
