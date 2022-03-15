@@ -7,13 +7,21 @@ const Question = require('../models/question');
 const Order = require('../models/order');
 const dynamicPrice = require('../helpers/dynamicPrice');
 const cancelOrder = require('../helpers/cancelOrder');
+const isQuestionExpired = require('../helpers/isQuestionExpired');
 const { findByIdAndUpdate } = require('../models/user');
 require('dotenv').config();
 
 // Test Page
 router.get('/', (req, res) => {
+
     res.status(200);
-    return res.send(`<h1>I am Working</h1>`);
+    return res.json({
+        "message": "I am working Fine",
+        "Server Date": new Date().toLocaleDateString().toString(),
+        "Server hour": new Date().getHours().toString(),
+        "Server min": new Date().getMinutes().toString()
+
+    });
 })
 
 
@@ -175,6 +183,21 @@ router.get('/home', async (req, res) => {
 // User order Route
 router.post('/user/:customerEmail', async (req, res) => {
     try {
+
+
+        // checking if question is expired or not 
+
+        const isExpired = await isQuestionExpired(req.body.questionName);
+
+        console.log(isExpired);
+
+        if (isExpired === true) {
+            console.log(isExpired);
+            res.status(400);
+            return res.json({ "message": " question time expired" });
+        }
+
+        console.log("outside");
 
         // Taking total price ( yes + no ) to be 100
 
@@ -683,6 +706,20 @@ router.post('/user/:customerEmail', async (req, res) => {
 router.post('/user/cancel/:customerEmail', async (req, res) => {
     try {
 
+        // checking if question is expired or not 
+
+        const isExpired = await isQuestionExpired(req.body.questionName);
+
+        console.log(isExpired);
+
+        if (isExpired === true) {
+            console.log(isExpired);
+            res.status(400);
+            return res.json({ "message": " question time expired" });
+        }
+
+        console.log("outside");
+
         // Taking total price ( yes + no ) to be 100
 
         const totalPrice = 100;
@@ -788,20 +825,11 @@ router.post('/admin/qsn', async (req, res) => {
 
         console.log(req.body);
 
-        const { name , description , yesValue , noValue } = req.body;
+        console.log(typeof req.body.expiryDate);
+        console.log(typeof req.body.expiryTime);
 
-        const expiryDate = req.body.expiryDate.toString();
-        const expiryTime = req.body.expiryTime.toString();
 
-        const qsn = new Question({
-            name,
-            description,
-            yesValue,
-            expiryDate,
-            expiryTime,
-            yesValue,
-            noValue
-        });
+        const qsn = new Question(req.body);
         await qsn.save();
 
         res.status(201);
@@ -859,20 +887,20 @@ router.post('/admin/user', async (req, res) => {
 
         console.log(req.body);
 
-        const { email , updateAmount } = req.body;
+        const { email, updateAmount } = req.body;
 
 
         // find the user in DB
 
-        const user = await User.findOne({email}).exec();
+        const user = await User.findOne({ email }).exec();
 
         const oldWallet = user.wallet;
-        
+
         const newWallet = oldWallet + updateAmount;
 
         // update the wallet in DB
 
-        await findByIdAndUpdate({_id:user._id},{wallet:newWallet}).exec();
+        await findByIdAndUpdate({ _id: user._id }, { wallet: newWallet }).exec();
 
         res.status(201);
         return res.json({ message: 'wallet updated' });
