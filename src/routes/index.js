@@ -178,7 +178,7 @@ router.post('/kyc', upload.single('avatar'), async (req, res) => {
         if (decoded) {
 
             console.log("user fetching");
-            const user = await User.findOne({ email: req.cookies.email }).exec();
+            const user = await User.findOne({ email }).exec();
             console.log("user fetched");
 
             // Update user in DB
@@ -312,6 +312,21 @@ router.post('/user/order', async (req, res) => {
             await dynamicPrice(customerResponse, orderQuantity, questionName);
 
 
+            // Deleting order value from new customer wallet
+
+            const orderUser = await User.findOne({email:customerEmail}).exec();
+
+            const dbWallet = orderUser.wallet;
+
+            const orderValue = orderPrice * orderQuantity;
+
+            if(orderValue > dbWallet) {
+                res.status(400);
+                return res.json({message: "Wallet balance not sufficient"});
+            } else {
+                const newWallet = dbWallet - orderValue;
+                await User.findByIdAndUpdate({_id:orderUser._id},{wallet:newWallet}).exec();
+            }
             // Checking if for a particular question , opposite order is there which is pending for a match
 
             if (customerResponse === 'yes') {
