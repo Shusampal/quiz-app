@@ -144,6 +144,45 @@ router.post('/signin', async (req, res) => {
 })
 
 
+// To get a user detail
+
+router.get('/user', (req, res) => {
+    try {
+        // Checking if cookie is in the request
+        const { accessToken, email } = req.cookies;
+
+        // if no cookies , then send no token found
+        if (!accessToken || !email) {
+            res.status(400);
+            return res.json({ message: 'no token or mail' });
+        }
+
+        // Verifies whether it is a valid JWT token
+        const decoded = jwt.verify(accessToken, process.env.SECRET);
+
+        // If token is valid , then provide user detail
+
+        if (decoded) {
+
+            // Getting User from DB
+            console.log('user find started');
+            const user = await User.findOne({ email }).lean();
+            console.log('user find end');
+            console.log(user);
+
+            res.status(200);
+            return res.send(user);
+        } else {
+            res.status(400);
+            return res.json({ message: 'invalied token' });
+        }
+
+
+    } catch (error) {
+        res.status(500);
+        return res.json({ message: 'server error' });
+    }
+})
 
 /* -------------------User KYC Route------------------ */
 
@@ -314,18 +353,18 @@ router.post('/user/order', async (req, res) => {
 
             // Deleting order value from new customer wallet
 
-            const orderUser = await User.findOne({email:customerEmail}).exec();
+            const orderUser = await User.findOne({ email: customerEmail }).exec();
 
             const dbWallet = orderUser.wallet;
 
             const orderValue = orderPrice * orderQuantity;
 
-            if(orderValue > dbWallet) {
+            if (orderValue > dbWallet) {
                 res.status(400);
-                return res.json({message: "Wallet balance not sufficient"});
+                return res.json({ message: "Wallet balance not sufficient" });
             } else {
                 const newWallet = dbWallet - orderValue;
-                await User.findByIdAndUpdate({_id:orderUser._id},{wallet:newWallet}).exec();
+                await User.findByIdAndUpdate({ _id: orderUser._id }, { wallet: newWallet }).exec();
             }
             // Checking if for a particular question , opposite order is there which is pending for a match
 

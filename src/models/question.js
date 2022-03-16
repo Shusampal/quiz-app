@@ -10,11 +10,23 @@ const questionSchema = new Schema({
     type: String,
     required: true
   },
+  startDate: {
+    type: String,
+    required: true
+  },
+  startTime: {
+    type: String,
+    required: true
+  },
   expiryDate: {
     type: String,
     required: true
   },
   expiryTime: {
+    type: String,
+    required: true
+  },
+  sourceOfTruth: {
     type: String,
     required: true
   },
