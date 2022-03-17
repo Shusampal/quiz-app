@@ -937,6 +937,56 @@ router.post('/user/cancel', async (req, res) => {
 })
 
 
+// To get History of a user
+router.get('/history/:email', async (req, res) => {
+    try {
+
+        console.log("HISTORY ROUTE");
+
+        const { email } = req.params;
+
+        if (!email) {
+
+            return res.json({ message: 'missing or wrong credentials' });
+        }
+
+
+
+        // To get all pending order
+
+        const pending = await Order.find({ customerEmail: email }).lean();
+
+
+        // To get all matched order
+
+        const user = await User.findOne({ email }).lean();
+
+        console.log(user.bids);
+
+        const matched = user.bids;
+
+
+        const history = {
+            "matched" : matched,
+            "pending" : pending
+        }
+
+
+        res.status(200);
+        return res.send(history);
+
+
+
+
+
+    } catch (error) {
+        res.status(500);
+        return res.json({ message: 'server error' });
+    }
+})
+
+
+
 /* --------------Admin Panel Routes------------------- */
 
 
