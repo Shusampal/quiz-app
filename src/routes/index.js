@@ -33,18 +33,22 @@ router.get('/', (req, res) => {
 // Signup Route
 router.post('/signup', async (req, res) => {
     try {
+
+        console.log('signup')
         const { firstName, lastName, email, password, mobile, gender } = req.body;
 
         // Initial validation of body
         if (!email || !password || !mobile || !firstName || !lastName || !gender) {
-            res.status(400);
+
             return res.json({ message: 'missing or wrong credentials' });
         }
 
+
+        console.log(req.body)
         const mob = mobile.toString();
 
         if (mob.length !== 10) {
-            res.status(400);
+
             return res.json({ message: 'missing or wrong credentials' });
         }
 
@@ -71,7 +75,7 @@ router.post('/signup', async (req, res) => {
             await doc.save();
             console.log('user created');
 
-            res.status(201);
+            res.status(200);
             return res.json({ message: 'user created' });
         }
 
@@ -82,14 +86,18 @@ router.post('/signup', async (req, res) => {
 })
 
 
+
+
 // Signin Route
 router.post('/signin', async (req, res) => {
     try {
+
+        console.log('signin');
+
         const { email, password } = req.body;
 
         // Initial validation of body
         if (!email || !password) {
-            res.status(400);
             return res.json({ message: 'missing or wrong credentials' });
         }
 
@@ -124,16 +132,18 @@ router.post('/signin', async (req, res) => {
                     kyc: DbUser[0].kyc,
                     bids: DbUser[0].bids
                 }
+
+
                 res.cookie('accessToken', token);
                 res.cookie('email', DbUser[0].email);
                 res.status(200);
-                return res.json({ message: 'user login done', userObj });
+                return res.json({ message: 'user login done', userObj  });
             } else {
-                res.status(400);
+
                 return res.json({ message: 'user login failed' });
             }
         } else {
-            res.status(400);
+
             return res.json({ message: 'user not in DB' });
         }
 
@@ -146,27 +156,32 @@ router.post('/signin', async (req, res) => {
 
 // To get a user detail
 
-router.get('/user', (req, res) => {
+router.get('/user/:email', async (req, res) => {
     try {
-        // Checking if cookie is in the request
-        const { accessToken, email } = req.cookies;
 
+        console.log("USER DETAIL")
+        // Checking if cookie is in the request
+        //const { accessToken, email } = req.cookies;
+
+       // console.log(req.cookies);
+        ///console.log(req.user);
         // if no cookies , then send no token found
-        if (!accessToken || !email) {
-            res.status(400);
-            return res.json({ message: 'no token or mail' });
-        }
+        // if (!accessToken || !email) {
+        //     res.status(400);
+        //     return res.json({ message: 'no token or mail' });
+        // }
 
         // Verifies whether it is a valid JWT token
-        const decoded = jwt.verify(accessToken, process.env.SECRET);
+        //const decoded = jwt.verify(accessToken, process.env.SECRET);
 
         // If token is valid , then provide user detail
 
-        if (decoded) {
+        if (true) {
 
             // Getting User from DB
+            console.log("USER DETAIL from DB")
             console.log('user find started');
-            const user = await User.findOne({ email }).lean();
+            const user = await User.findOne({ email: req.params.email }).lean();
             console.log('user find end');
             console.log(user);
 
@@ -187,7 +202,7 @@ router.get('/user', (req, res) => {
 /* -------------------User KYC Route------------------ */
 
 
-router.post('/kyc', upload.single('avatar'), async (req, res) => {
+router.post('/kyc/:email', upload.single('avatar'), async (req, res) => {
     try {
 
         console.log("kyc is hit");
@@ -196,25 +211,27 @@ router.post('/kyc', upload.single('avatar'), async (req, res) => {
 
         // Initial validation of body
         if (!userName || !dateOfBirth || !panNumber) {
-            res.status(400);
+
             return res.json({ message: 'missing or wrong credentials' });
         }
 
         // Checking if cookie is in the request
-        const { accessToken, email } = req.cookies;
+        // const { accessToken, email } = req.cookies;
 
         // if no cookies , then send no token found
-        if (!accessToken) {
-            res.status(400);
-            return res.json({ message: 'no token' });
-        }
+        // if (!accessToken) {
+
+        //     return res.json({ message: 'no token' });
+        // }
 
         // Verifies whether it is a valid JWT token
-        const decoded = jwt.verify(accessToken, process.env.SECRET);
+        // const decoded = jwt.verify(accessToken, process.env.SECRET);
 
-        console.log("Decoded", decoded);
+        // console.log("Decoded", decoded);
 
-        if (decoded) {
+        const { email } = req.params;
+
+        if (true) {
 
             console.log("user fetching");
             const user = await User.findOne({ email }).exec();
@@ -288,20 +305,24 @@ router.get('/home', async (req, res) => {
 /* -------------------User Order and Cancel Route----------------- */
 
 // User order Route
-router.post('/user/order', async (req, res) => {
+router.get('/customer/order', async (req, res) => {
     try {
 
 
+        console.log('user order route');
+
         // checking if question is expired or not 
 
-        const isExpired = await isQuestionExpired(req.body.questionName);
+        console.log(req.query);
+
+        const isExpired = await isQuestionExpired(req.query.questionName);
 
         console.log(isExpired);
 
         if (isExpired === true) {
             console.log(isExpired);
-            res.status(400);
-            return res.json({ "message": " question time expired" });
+            res.send({ "message": " question time expired" });
+            return;
         }
 
         console.log("outside");
@@ -311,31 +332,31 @@ router.post('/user/order', async (req, res) => {
         const totalPrice = 100;
 
         // Checking if cookie is in the request
-        const { accessToken } = req.cookies;
+        // const { accessToken } = req.cookies;
 
         // if no cookies , then send no token found
-        if (!accessToken) {
-            res.status(400);
-            return res.json({ message: 'no token' });
-        }
+        // if (!accessToken) {
+        //     res.status(400);
+        //     return res.json({ message: 'no token' });
+        // }
 
         console.log(req.params);
         console.log(req.body);
-        const customerEmail = req.cookies.email;
-        const { questionName, customerResponse, orderPrice, orderQuantity } = req.body;
+
+        const { questionName, customerResponse, orderPrice, orderQuantity , customerEmail} = req.query;
 
         if (!customerEmail || !questionName || !customerResponse || !orderPrice || !orderQuantity) {
-            res.status(400);
+
             return res.json({ message: 'missing or wrong credentials' });
         }
 
 
         // Verifies whether it is a valid JWT token
-        const decoded = jwt.verify(accessToken, process.env.SECRET);
+        // const decoded = jwt.verify(accessToken, process.env.SECRET);
 
 
         // If token is valid , then provide all questions to FE , else send a failed message
-        if (decoded) {
+        if (true) {
 
             // Creating order object for the new  customer
             const orderObject = {
@@ -360,7 +381,7 @@ router.post('/user/order', async (req, res) => {
             const orderValue = orderPrice * orderQuantity;
 
             if (orderValue > dbWallet) {
-                res.status(400);
+
                 return res.json({ message: "Wallet balance not sufficient" });
             } else {
                 const newWallet = dbWallet - orderValue;
@@ -836,7 +857,7 @@ router.post('/user/cancel', async (req, res) => {
 
         if (isExpired === true) {
             console.log(isExpired);
-            res.status(400);
+
             return res.json({ "message": " question time expired" });
         }
 
@@ -847,13 +868,13 @@ router.post('/user/cancel', async (req, res) => {
         const totalPrice = 100;
 
         // Checking if cookie is in the request
-        const { accessToken } = req.cookies;
+        // const { accessToken } = req.cookies;
 
         // if no cookies , then send no token found
-        if (!accessToken) {
-            res.status(400);
-            return res.json({ message: 'no token' });
-        }
+        // if (!accessToken) {
+
+        //     return res.json({ message: 'no token' });
+        // }
 
         console.log(req.params);
         console.log(req.body);
@@ -861,18 +882,18 @@ router.post('/user/cancel', async (req, res) => {
         const { questionName, customerResponse, orderPrice, orderQuantity, cancel } = req.body;
 
         if (!customerEmail || !questionName || !customerResponse || !orderPrice || !orderQuantity || !cancel) {
-            res.status(400);
+            // res.status(400);
             return res.json({ message: 'missing or wrong credentials' });
         }
 
 
         // Verifies whether it is a valid JWT token
-        const decoded = jwt.verify(accessToken, process.env.SECRET);
+        // const decoded = jwt.verify(accessToken, process.env.SECRET);
 
 
         // If token is valid , then provide all questions to FE , else send a failed message
 
-        if (decoded) {
+        if (true) {
 
             console.log("Is Decoded");
 
